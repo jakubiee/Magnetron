@@ -1,0 +1,15 @@
+# System
+.DS_Store
+
+# VSCode
+.vscode
+
+# Python
+__pycache__
+.ruff_cache
+
+# FreeCad
+*.FCBak
+
+# Simulation
+simulation/results

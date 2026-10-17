@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: magnetron-simulation
+Version: 0.1.0
+Summary: Finite-element simulation of a magnetron
+Requires-Python: >=3.12

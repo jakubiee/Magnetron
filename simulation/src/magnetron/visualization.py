@@ -10,7 +10,7 @@ import numpy as np
 from scipy.interpolate import griddata
 
 if TYPE_CHECKING:
-    from src.magnetostatics import SimulationResult
+    from src.magnetron.magnetostatics import SimulationResult
 
 
 def plot_magnetic_field(

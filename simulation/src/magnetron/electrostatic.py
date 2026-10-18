@@ -25,8 +25,10 @@ class ElectrostaticResult:
     ey: Any
     e_magnitude: Any
 
+
 class ElectrostaticSimulation:
     TARGET_GROUP = "Target"
+    ANODE_GROUPS = ("AnodeLeft", "AnodeRight")
 
     def __init__(self, mesh_path, parameters, *, comm=MPI.COMM_WORLD):
         self.mesh_path = Path(mesh_path)
@@ -44,9 +46,25 @@ class ElectrostaticSimulation:
         domain = mesh_data.mesh
         cell_tags = mesh_data.cell_tags
 
-        target_tag = self._find_physical_group_tag(mesh_data.physical_groups, self.TARGET_GROUP)
+        target_tag = self._find_physical_group_tag(
+            mesh_data.physical_groups,
+            self.TARGET_GROUP,
+        )
 
-        potential = self._solve_potential(domain, cell_tags, target_tag)
+        anode_tags = {
+            name: self._find_physical_group_tag(
+                mesh_data.physical_groups,
+                name,
+            )
+            for name in self.ANODE_GROUPS
+        }
+
+        potential = self._solve_potential(
+            domain,
+            cell_tags,
+            target_tag,
+            anode_tags,
+        )
         ex, ey, e_magnitude = self._calculate_electric_field(domain, potential)
 
         fields_file = results_dir / "electrostatic_fields.xdmf"
@@ -71,7 +89,9 @@ class ElectrostaticSimulation:
                 },
                 "boundary_conditions": {
                     "target": self.parameters.target_voltage,
-                    "outer_boundary": self.parameters.ground_voltage,
+                    "anode_left": self.parameters.ground_voltage,
+                    "anode_right": self.parameters.ground_voltage,
+                    "outer_boundary": "natural (zero normal flux)",
                 },
                 "model": "Charge-free electrostatics with constant permittivity",
             }
@@ -105,9 +125,8 @@ class ElectrostaticSimulation:
         group = physical_groups[group_name]
         return group.tag if hasattr(group, "tag") else int(group)
 
-    def _solve_potential(self, domain, cell_tags, target_tag):
+    def _solve_potential(self, domain, cell_tags, target_tag, anode_tags):
         tdim = domain.topology.dim
-        fdim = tdim-1
 
         V = fem.functionspace(domain, ("Lagrange", 1))
 
@@ -115,24 +134,59 @@ class ElectrostaticSimulation:
         if len(target_cells) == 0:
             raise ValueError("The Target physical group contains no mesh cells.")
 
-        target_dofs = fem.locate_dofs_topological(V, tdim, target_cells)
+        target_dofs = fem.locate_dofs_topological(
+            V,
+            tdim,
+            target_cells,
+        )
 
-        boundary_facets = locate_entities_boundary(domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
+        target_bc = fem.dirichletbc(
+            self.parameters.target_voltage,
+            target_dofs,
+            V,
+        )
 
-        boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
+        anode_dofs_list = []
 
-        target_bc = fem.dirichletbc(self.parameters.target_voltage, target_dofs, V)
-        ground_bc = fem.dirichletbc(self.parameters.ground_voltage, boundary_dofs, V)
+        for name, tag in anode_tags.items():
+            anode_cells = cell_tags.find(tag)
+
+            if len(anode_cells) == 0:
+                raise ValueError(f"The physical group '{name}' contains no mesh cells.")
+
+            dofs = fem.locate_dofs_topological(
+                V,
+                tdim,
+                anode_cells,
+            )
+            anode_dofs_list.append(dofs)
+
+        anode_dofs = np.unique(np.concatenate(anode_dofs_list))
+
+        ground_bc = fem.dirichletbc(
+            self.parameters.ground_voltage,
+            anode_dofs,
+            V,
+        )
 
         v = ufl.TrialFunction(V)
         w = ufl.TestFunction(V)
 
-        epsilon = (self.parameters.eps_0 * self.parameters.eps_r_air)
+        epsilon = self.parameters.eps_0 * self.parameters.eps_r_air
 
         a = epsilon * ufl.inner(ufl.grad(v), ufl.grad(w)) * ufl.dx
-        L = fem.Constant(domain, self.parameters.ground_voltage) * w * ufl.dx
+        L = fem.Constant(domain, 0.0) * w * ufl.dx
 
-        problem = LinearProblem(a, L, bcs=[target_bc, ground_bc], petsc_options_prefix="electrostatic_", petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        problem = LinearProblem(
+            a,
+            L,
+            bcs=[target_bc, ground_bc],
+            petsc_options_prefix="electrostatic_",
+            petsc_options={
+                "ksp_type": "preonly",
+                "pc_type": "lu",
+            },
+        )
 
         potential = problem.solve()
         potential.name = "Potential"
@@ -145,10 +199,26 @@ class ElectrostaticSimulation:
         V = fem.functionspace(domain, ("Lagrange", 1))
         dx = ufl.Measure("dx", domain=domain)
 
-        ex = ElectrostaticSimulation._project(-potential.dx(0), V, dx, "electric_ex_", "E_x")
-        ey = ElectrostaticSimulation._project(-potential.dx(1), V, dx, "electric_ey_", "E_y")
+        ex = ElectrostaticSimulation._project(
+            -potential.dx(0),
+            V,
+            dx,
+            "electric_ex_",
+            "E_x",
+        )
+        ey = ElectrostaticSimulation._project(
+            -potential.dx(1),
+            V,
+            dx,
+            "electric_ey_",
+            "E_y",
+        )
 
-        e_magnitude = ElectrostaticSimulation._project(ufl.sqrt(potential.dx(0) ** 2 + potential.dx(1)** 2), V, dx, "electric_magnitude_", "E_magnitude")
+        # Compute magnitude from the projected field components.
+        e_magnitude = fem.Function(V)
+        e_magnitude.name = "E_magnitude"
+        e_magnitude.x.array[:] = np.sqrt(ex.x.array**2 + ey.x.array**2)
+        e_magnitude.x.scatter_forward()
 
         return ex, ey, e_magnitude
 
@@ -164,7 +234,7 @@ class ElectrostaticSimulation:
             petsc_options={
                 "ksp_type": "preonly",
                 "pc_type": "lu",
-            }
+            },
         )
 
         function = problem.solve()

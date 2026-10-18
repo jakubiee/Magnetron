@@ -1,0 +1,44 @@
+License and Copyright Notices
+
+Magnetron Copyright (c) jakubiee
+
+This notice must be preserved in distributions of this project and derivative works, subject to the applicable license terms.
+
+--------------------------------------------------------------------
+Licensing Notice
+
+This repository contains hardware designs and software, which are licensed separately.
+
+- **`hardware/`** — Electronics, PCB designs, schematics, mechanical designs, CAD files, and related hardware documentation.
+
+  Licensed under the **CERN Open Hardware Licence Version 2 — Strongly Reciprocal (CERN-OHL-S-2.0)**.
+
+  Full license text: https://ohwr.org/cern_ohl_s_v2.pdf
+
+- **`simulation/`** — Software, simulation code, scripts, and related software documentation.
+
+  Licensed under the **GNU General Public License v3.0 (GPL-3.0-only)**.
+
+  Full license text: https://www.gnu.org/licenses/gpl-3.0.html
+
+Each part of the repository is governed by its respective license. If a work contains material from multiple parts, the applicable licenses may impose additional requirements.
+
+--------------------------------------------------------------------
+Contributor Notice
+
+By contributing to this repository, you agree that your contributions will be made available under the license applicable to the relevant part of the project, unless explicitly agreed otherwise.
+
+- Contributions to `hardware/` → CERN-OHL-S-2.0
+- Contributions to `simulation/` → GPL-3.0-only
+
+Contributors remain responsible for ensuring that they have the right to submit their contributions under these terms.
+
+--------------------------------------------------------------------
+- You may use, study, modify, and redistribute the project under the terms of the applicable licenses.
+- You may manufacture and distribute hardware based on the hardware designs, subject to the requirements of CERN-OHL-S-2.0.
+- When distributing hardware or modified hardware designs covered by CERN-OHL-S-2.0, you must comply with its corresponding-source and other applicable obligations.
+- When distributing the simulation software or modified versions of it, you must comply with GPL-3.0, including its applicable source-code availability and licensing requirements.
+- The software license does not automatically apply to the hardware designs, and the hardware license does not automatically apply to the software.
+
+--------------------------------------------------------------------
+For the complete legal terms, refer to the respective license texts linked above. In case of any conflict, the full license texts take precedence over this summary.

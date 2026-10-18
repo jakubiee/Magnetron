@@ -1,0 +1,15 @@
+name: magnetron
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - fenics-dolfinx
+  - gmsh
+  - numpy
+  - scipy
+  - matplotlib
+  - jupyter
+  - ipykernel
+  - pip
+  - pip:
+      - -e .

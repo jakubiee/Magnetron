@@ -1,17 +1,21 @@
-
 from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import matplotlib.tri as mtri
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
 from scipy.interpolate import griddata
 from .magnetostatic import SimulationResult
+from .electrostatic import ElectrostaticResult
+from dolfinx import plot as dolfinx_plot
 
 
-def _interpolate_field(result: SimulationResult, values: np.ndarray, x_grid: np.ndarray,y_grid: np.ndarray):
+def _interpolate_field(
+    result: SimulationResult, values: np.ndarray, x_grid: np.ndarray, y_grid: np.ndarray
+):
     points = result.domain.geometry.x[:, :2]
     values = np.asarray(values).reshape(-1)
 
@@ -31,8 +35,14 @@ def _interpolate_field(result: SimulationResult, values: np.ndarray, x_grid: np.
     )
 
 
-def plot_magnetic_field(result: SimulationResult, output_path: str | Path, *, grid_shape: tuple[int, int] = (300, 250), target_diameter: float = 50.8,
-target_thickness: float = 3.0,):
+def plot_magnetic_field(
+    result: SimulationResult,
+    output_path: str | Path,
+    *,
+    grid_shape: tuple[int, int] = (300, 250),
+    target_diameter: float = 50.8,
+    target_thickness: float = 3.0,
+):
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -49,9 +59,7 @@ target_thickness: float = 3.0,):
 
     bx = _interpolate_field(result, result.bx.x.array, x_grid, y_grid)
     by = _interpolate_field(result, result.by.x.array, x_grid, y_grid)
-    b_magnitude = _interpolate_field(
-        result, result.b_magnitude.x.array, x_grid, y_grid
-    )
+    b_magnitude = _interpolate_field(result, result.b_magnitude.x.array, x_grid, y_grid)
 
     figure, axis = plt.subplots(figsize=(12, 7))
 
@@ -103,3 +111,66 @@ target_thickness: float = 3.0,):
 
     return output_path
 
+
+def plot_electric_field(
+    result: ElectrostaticResult,
+    output_path: str | Path,
+):
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    topology, _, _ = dolfinx_plot.vtk_mesh(
+        result.domain,
+        result.domain.topology.dim,
+    )
+    triangles = topology.reshape(-1, 4)[:, 1:]
+    points = result.domain.geometry.x[:, :2]
+
+    triangulation = mtri.Triangulation(
+        points[:, 0],
+        points[:, 1],
+        triangles,
+    )
+
+    potential = result.potential.x.array
+    e_magnitude = result.e_magnitude.x.array
+
+    figure, axes = plt.subplots(1, 2, figsize=(15, 6))
+
+    potential_plot = axes[0].tricontourf(
+        triangulation,
+        potential,
+        levels=40,
+        cmap="coolwarm",
+    )
+    figure.colorbar(
+        potential_plot,
+        ax=axes[0],
+        label="Potential [V]",
+    )
+    axes[0].set_title("Electric potential")
+    axes[0].set_xlabel("x [mm]")
+    axes[0].set_ylabel("y [mm]")
+    axes[0].set_aspect("equal")
+
+    field_plot = axes[1].tricontourf(
+        triangulation,
+        e_magnitude,
+        levels=40,
+        cmap="inferno",
+    )
+    figure.colorbar(
+        field_plot,
+        ax=axes[1],
+        label="|E| [V/m]",
+    )
+    axes[1].set_title("Electric field magnitude")
+    axes[1].set_xlabel("x [mm]")
+    axes[1].set_ylabel("y [mm]")
+    axes[1].set_aspect("equal")
+
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=200)
+    plt.close(figure)
+
+    return output_path

@@ -14,6 +14,8 @@ class MagnetronMesh:
         "outer_magnet_left": (11, "OuterMagnetLeft"),
         "outer_magnet_right": (12, "OuterMagnetRight"),
         "backing_plate": (20, "BackingPlate"),
+        "anode_left": (30, "AnodeLeft"),
+        "anode_right": (31, "AnodeRight"),
     }
 
     def __init__(
@@ -30,8 +32,7 @@ class MagnetronMesh:
 
         if gmsh.isInitialized():
             raise RuntimeError(
-                "Gmsh is already initialized. Finalize it before "
-                "generating a new mesh."
+                "Gmsh is already initialized. Finalize it before generating a new mesh."
             )
 
         gmsh.initialize()
@@ -62,19 +63,14 @@ class MagnetronMesh:
 
     def _add_physical_groups(self, groups) -> None:
         for key, (tag, name) in self.PHYSICAL_GROUPS.items():
-            surface_tags = [
-                tag
-                for dimension, tag in groups[key]
-                if dimension == 2
-            ]
+            surface_tags = [tag for dimension, tag in groups[key] if dimension == 2]
 
             if not surface_tags:
-                raise ValueError(
-                    f"No surfaces found for physical group '{name}'."
-                )
+                raise ValueError(f"No surfaces found for physical group '{name}'.")
 
             gmsh.model.addPhysicalGroup(2, surface_tags, tag)
             gmsh.model.setPhysicalName(2, tag, name)
+
 
 def mesh_view(mesh_path):
     mesh_path = Path(mesh_path)

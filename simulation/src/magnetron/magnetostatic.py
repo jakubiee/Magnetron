@@ -18,6 +18,7 @@ from dolfinx.mesh import locate_entities_boundary
 
 from .parameters import MagneticParameters
 
+
 @dataclass
 class SimulationResult:
     directory: Path
@@ -38,9 +39,17 @@ class MagnetostaticSimulation:
         "OuterMagnetLeft",
         "OuterMagnetRight",
         "BackingPlate",
+        "AnodeLeft",
+        "AnodeRight",
     )
 
-    def __init__(self, mesh_path, parameters: MagneticParameters, *, comm: MPI.Intracomm = MPI.COMM_WORLD):
+    def __init__(
+        self,
+        mesh_path,
+        parameters: MagneticParameters,
+        *,
+        comm: MPI.Intracomm = MPI.COMM_WORLD,
+    ):
         self.mesh_path = mesh_path
         self.parameters = parameters
         self.comm = comm
@@ -50,9 +59,7 @@ class MagnetostaticSimulation:
         results_dir.mkdir(parents=True, exist_ok=True)
 
         if not self.mesh_path.exists():
-            raise FileNotFoundError(
-                f"Mesh file not found: {self.mesh_path}" 
-            )
+            raise FileNotFoundError(f"Mesh file not found: {self.mesh_path}")
 
         mesh_data = gmsh.read_from_msh(
             str(self.mesh_path),
@@ -117,17 +124,13 @@ class MagnetostaticSimulation:
             b_magnitude=b_magnitude,
         )
 
-
     def _physical_group_tags(self, physical_groups):
         missing = [name for name in self.GROUPS if name not in physical_groups]
 
         if missing:
             raise ValueError("Mesh is missing physical groups: ") + ", ".join(missing)
-        
-        return {
-            name: physical_groups[name].tag
-            for name in self.GROUPS
-        }
+
+        return {name: physical_groups[name].tag for name in self.GROUPS}
 
     def _solve_fields(self, domain, cell_tags, tags):
         V = fem.functionspace(domain, ("Lagrange", 1))
@@ -136,7 +139,9 @@ class MagnetostaticSimulation:
 
         facet_dimension = domain.topology.dim - 1
 
-        boundary_facets = locate_entities_boundary(domain, facet_dimension, lambda x: np.full(x.shape[1], True))
+        boundary_facets = locate_entities_boundary(
+            domain, facet_dimension, lambda x: np.full(x.shape[1], True)
+        )
 
         boundary_dofs = fem.locate_dofs_topological(V, facet_dimension, boundary_facets)
 
@@ -155,13 +160,18 @@ class MagnetostaticSimulation:
 
         M = self.parameters.remanence / self.parameters.mu_0
 
-        source = (-M * test.dx(0) * dx(tags["InnerMagnet"]) +
-                  M * test.dx(0) * dx(tags["OuterMagnetLeft"]) +
-                  M * test.dx(0) * dx(tags["OuterMagnetRight"]))
+        source = (
+            -M * test.dx(0) * dx(tags["InnerMagnet"])
+            + M * test.dx(0) * dx(tags["OuterMagnetLeft"])
+            + M * test.dx(0) * dx(tags["OuterMagnetRight"])
+        )
 
         potential = LinearProblem(
-            a, source, bcs=[bc], petsc_options_prefix="magnetostatic_",
-            petsc_options={"ksp_type": "preonly", "pc_type": "lu"}
+            a,
+            source,
+            bcs=[bc],
+            petsc_options_prefix="magnetostatic_",
+            petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
         ).solve()
 
         potential.name = "A_z"
@@ -186,13 +196,12 @@ class MagnetostaticSimulation:
 
         return potential, bx, by, b_magnitude
 
-
     def _permeability(self, domain, cell_tags, tags):
         V0 = fem.functionspace(domain, ("DG", 0))
         permeability = fem.Function(V0)
         permeability.name = "Permeability"
 
-        permeability.x.array[:] = (self.parameters.mu_0 * self.parameters.mu_r_air)
+        permeability.x.array[:] = self.parameters.mu_0 * self.parameters.mu_r_air
 
         material_permeabilities = {
             "Target": self.parameters.mu_r_air,
@@ -200,6 +209,8 @@ class MagnetostaticSimulation:
             "OuterMagnetLeft": self.parameters.mu_r_magnet,
             "OuterMagnetRight": self.parameters.mu_r_magnet,
             "BackingPlate": self.parameters.mu_r_backing,
+            "AnodeLeft": self.parameters.mu_r_air,
+            "AnodeRight": self.parameters.mu_r_air,
         }
 
         for name, mu_r in material_permeabilities.items():
@@ -222,8 +233,3 @@ class MagnetostaticSimulation:
         )
 
         return problem.solve()
-
-
-
-
-    

@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import gmsh
 import ufl
 import numpy as np
 from mpi4py import MPI
@@ -70,6 +69,13 @@ class MagnetostaticSimulation:
         domain = mesh_data.mesh
         cell_tags = mesh_data.cell_tags
 
+        coordinates = domain.geometry.x
+
+        if domain.comm.rank == 0:
+            print("Mesh coordinate bounds [m]:")
+            print("  x:", coordinates[:, 0].min(), coordinates[:, 0].max())
+            print("  y:", coordinates[:, 1].min(), coordinates[:, 1].max())
+
         group_tags = self._physical_group_tags(mesh_data.physical_groups)
 
         potential, bx, by, b_magnitude = self._solve_fields(
@@ -128,7 +134,9 @@ class MagnetostaticSimulation:
         missing = [name for name in self.GROUPS if name not in physical_groups]
 
         if missing:
-            raise ValueError("Mesh is missing physical groups: ") + ", ".join(missing)
+            raise ValueError(
+                "Mesh is missing physical groups: " + ", ".join(missing)
+            )
 
         return {name: physical_groups[name].tag for name in self.GROUPS}
 

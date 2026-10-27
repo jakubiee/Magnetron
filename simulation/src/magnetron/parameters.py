@@ -4,15 +4,15 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class GeometryParameters:
-    target_diameter: float = 50.8
-    target_thickness: float = 3.0
-    magnet_height: float = 10.0
-    inner_magnet_diameter: float = 20.0
-    outer_magnet_diameter: float = 10.0
-    outer_magnet_ring_radius: float = 25.0
-    magnet_to_target_distance: float = 5.0
-    anode_cathode_gap: float = 3.0
-    anode_width: float = 4.0
+    target_diameter: float = 0.0508
+    target_thickness: float = 0.003
+    magnet_height: float = 0.010
+    inner_magnet_diameter: float = 0.020
+    outer_magnet_diameter: float = 0.010
+    outer_magnet_ring_radius: float = 0.025
+    magnet_to_target_distance: float = 0.005
+    anode_cathode_gap: float = 0.003
+    anode_width: float = 0.004
 
 
 @dataclass(frozen=True)

@@ -14,26 +14,31 @@ from dolfinx import plot as dolfinx_plot
 
 
 def _interpolate_field(
-    result: SimulationResult, values: np.ndarray, x_grid: np.ndarray, y_grid: np.ndarray
+    result: SimulationResult,
+    function,
+    x_grid: np.ndarray,
+    y_grid: np.ndarray,
 ):
-    points = result.domain.geometry.x[:, :2]
-    values = np.asarray(values).reshape(-1)
+    from dolfinx import fem
 
-    if len(points) != len(values):
+    V = function.function_space
+    dof_coordinates = V.tabulate_dof_coordinates()[:, :2]
+    values = function.x.array.real
+
+    if len(dof_coordinates) != len(values):
         raise ValueError(
-            "Field values must correspond to mesh vertices. "
-            f"Got {len(values)} values for {len(points)} vertices."
+            f"Mismatch between DOF coordinates ({len(dof_coordinates)}) "
+            f"and field values ({len(values)})."
         )
 
     x_mesh, y_mesh = np.meshgrid(x_grid, y_grid)
 
     return griddata(
-        points,
+        dof_coordinates,
         values,
         (x_mesh, y_mesh),
         method="linear",
     )
-
 
 def plot_magnetic_field(
     result: SimulationResult,
@@ -57,9 +62,11 @@ def plot_magnetic_field(
     y_grid = np.linspace(y.min(), y.max(), ny)
     x_mesh, y_mesh = np.meshgrid(x_grid, y_grid)
 
-    bx = _interpolate_field(result, result.bx.x.array, x_grid, y_grid)
-    by = _interpolate_field(result, result.by.x.array, x_grid, y_grid)
-    b_magnitude = _interpolate_field(result, result.b_magnitude.x.array, x_grid, y_grid)
+    bx = _interpolate_field(result, result.bx, x_grid, y_grid)
+    by = _interpolate_field(result, result.by, x_grid, y_grid)
+    b_magnitude = _interpolate_field(
+        result, result.b_magnitude, x_grid, y_grid
+    )
 
     figure, axis = plt.subplots(figsize=(12, 7))
 
@@ -101,8 +108,8 @@ def plot_magnetic_field(
     colorbar.set_label("|B| [T]")
 
     axis.set_aspect("equal")
-    axis.set_xlabel("x [mm]")
-    axis.set_ylabel("y [mm]")
+    axis.set_xlabel("x [m]")
+    axis.set_ylabel("y [m]")
     axis.set_title("Magnetic field magnitude and field lines")
 
     figure.tight_layout()
@@ -165,8 +172,8 @@ def plot_electric_field(
         label="|E| [V/m]",
     )
     axes[1].set_title("Electric field magnitude")
-    axes[1].set_xlabel("x [mm]")
-    axes[1].set_ylabel("y [mm]")
+    axes[1].set_xlabel("x [m]")
+    axes[1].set_ylabel("y [m]")
     axes[1].set_aspect("equal")
 
     figure.tight_layout()

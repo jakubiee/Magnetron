@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import matplotlib.tri as mtri
 import matplotlib.pyplot as plt
@@ -40,6 +40,7 @@ def _interpolate_field(
         method="linear",
     )
 
+
 def plot_magnetic_field(
     result: SimulationResult,
     output_path: str | Path,
@@ -64,9 +65,7 @@ def plot_magnetic_field(
 
     bx = _interpolate_field(result, result.bx, x_grid, y_grid)
     by = _interpolate_field(result, result.by, x_grid, y_grid)
-    b_magnitude = _interpolate_field(
-        result, result.b_magnitude, x_grid, y_grid
-    )
+    b_magnitude = _interpolate_field(result, result.b_magnitude, x_grid, y_grid)
 
     figure, axis = plt.subplots(figsize=(12, 7))
 
@@ -156,8 +155,8 @@ def plot_electric_field(
         label="Potential [V]",
     )
     axes[0].set_title("Electric potential")
-    axes[0].set_xlabel("x [mm]")
-    axes[0].set_ylabel("y [mm]")
+    axes[0].set_xlabel("x [m]")
+    axes[0].set_ylabel("y [m]")
     axes[0].set_aspect("equal")
 
     field_plot = axes[1].tricontourf(
@@ -181,3 +180,51 @@ def plot_electric_field(
     plt.close(figure)
 
     return output_path
+
+
+def plot_electron_trajectories(
+    trajectories,
+    output_path,
+    *,
+    ionizations,
+):
+    figure, axis = plt.subplots(figsize=(11, 6))
+
+    for trajectory in trajectories:
+        position = np.asarray(trajectory.position, dtype=float)
+        if position.ndim != 2 or position.shape[1] != 2:
+            raise ValueError("Trajectory positions must have shape (n, 2).")
+        axis.plot(
+            position[:, 0] * 1e3,
+            position[:, 1] * 1e3,
+            linewidth=0.8,
+            alpha=0.6,
+        )
+
+    ionization_events = list(ionizations) if ionizations is not None else []
+    if ionization_events:
+        axis.scatter(
+            [event.position[0] * 1e3 for event in ionization_events],
+            [event.position[1] * 1e3 for event in ionization_events],
+            color="red",
+            s=20,
+            label="Ionization",
+            zorder=5,
+        )
+        axis.legend()
+
+    axis.set_xlabel("x [mm]")
+    axis.set_ylabel("y [mm]")
+    axis.set_title("Electron trajectories in argon")
+    axis.grid(True, alpha=0.3)
+    axis.set_aspect("equal", adjustable="box")
+    figure.tight_layout()
+
+    saved_path = None
+    if output_path is not None:
+        saved_path = Path(output_path)
+        saved_path.parent.mkdir(parents=True, exist_ok=True)
+        figure.savefig(saved_path, dpi=200)
+
+    plt.close(figure)
+    return saved_path

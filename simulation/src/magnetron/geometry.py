@@ -43,10 +43,13 @@ class MagnetronGeometry:
 
         return {
             "air": geo.addRectangle(
-                -0.04, -0.03, 0,
-                0.08, 0.06,
-            ), 
-           "target": geo.addRectangle(
+                -0.04,
+                -0.03,
+                0,
+                0.08,
+                0.06,
+            ),
+            "target": geo.addRectangle(
                 -g.target_diameter / 2,
                 0,
                 0,

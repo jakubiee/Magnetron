@@ -134,9 +134,7 @@ class MagnetostaticSimulation:
         missing = [name for name in self.GROUPS if name not in physical_groups]
 
         if missing:
-            raise ValueError(
-                "Mesh is missing physical groups: " + ", ".join(missing)
-            )
+            raise ValueError("Mesh is missing physical groups: " + ", ".join(missing))
 
         return {name: physical_groups[name].tag for name in self.GROUPS}
 

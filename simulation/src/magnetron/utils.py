@@ -97,6 +97,20 @@ class FieldInterpolator2D:
         )
         self.trifinder = triangulation.get_trifinder()
         self.triangles = triangles
+        triangle_points = self.points[triangles]
+        x0 = triangle_points[:, 0, 0]
+        y0 = triangle_points[:, 0, 1]
+        x1 = triangle_points[:, 1, 0]
+        y1 = triangle_points[:, 1, 1]
+        x2 = triangle_points[:, 2, 0]
+        y2 = triangle_points[:, 2, 1]
+        denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+        self._weight0_x = (y1 - y2) / denominator
+        self._weight0_y = (x2 - x1) / denominator
+        self._weight0_offset = -(self._weight0_x * x2 + self._weight0_y * y2)
+        self._weight1_x = (y2 - y0) / denominator
+        self._weight1_y = (x0 - x2) / denominator
+        self._weight1_offset = -(self._weight1_x * x2 + self._weight1_y * y2)
 
     def evaluate_components(self, x: float, y: float):
         if self._last_point == (x, y):
@@ -107,15 +121,19 @@ class FieldInterpolator2D:
             raise ValueError(f"Point ({x:.6g}, {y:.6g}) lies outside the FEM mesh")
 
         vertex_indices = self.triangles[triangle_index]
-        triangle = self.points[vertex_indices]
-        x0, y0 = triangle[0]
-        x1, y1 = triangle[1]
-        x2, y2 = triangle[2]
-        denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
-        weight0 = ((y1 - y2) * (x - x2) + (x2 - x1) * (y - y2)) / denominator
-        weight1 = ((y2 - y0) * (x - x2) + (x0 - x2) * (y - y2)) / denominator
-        weights = np.array([weight0, weight1, 1.0 - weight0 - weight1])
-        interpolated = weights @ self.values[vertex_indices]
+        weight0 = (
+            self._weight0_x[triangle_index] * x
+            + self._weight0_y[triangle_index] * y
+            + self._weight0_offset[triangle_index]
+        )
+        weight1 = (
+            self._weight1_x[triangle_index] * x
+            + self._weight1_y[triangle_index] * y
+            + self._weight1_offset[triangle_index]
+        )
+        weight2 = 1.0 - weight0 - weight1
+        values = self.values[vertex_indices]
+        interpolated = weight0 * values[0] + weight1 * values[1] + weight2 * values[2]
 
         self._last_point = (x, y)
         self._last_components = interpolated
@@ -155,8 +173,15 @@ def make_air_domain_checker(domain, cell_tags, air_tag):
         np.asarray(triangles, dtype=np.int32),
     )
     finder = triangulation.get_trifinder()
+    last_point = None
+    last_result = False
 
     def inside_air(x: float, y: float) -> bool:
-        return finder(float(x), float(y)) >= 0
+        nonlocal last_point, last_result
+        point = (x, y)
+        if point != last_point:
+            last_result = finder(float(x), float(y)) >= 0
+            last_point = point
+        return last_result
 
     return inside_air

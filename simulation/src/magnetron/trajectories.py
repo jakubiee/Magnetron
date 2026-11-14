@@ -12,6 +12,7 @@ ELEMENTARY_CHARGE = 1.602176634e-19
 ELECTRON_MASS = 9.1093837139e-31
 BOLTZMANN_CONSTANT = 1.380649e-23
 ARGON_ATOMIC_MASS = 39.948 * 1.66053906660e-27
+ELECTRON_CHARGE_TO_MASS = -ELEMENTARY_CHARGE / ELECTRON_MASS
 
 
 @dataclass
@@ -74,6 +75,47 @@ class ArgonCollisionData:
     ionization: CrossSectionTable
     excitation_threshold_ev: float = 11.55
     ionization_threshold_ev: float = 15.76
+    total_energy_ev: np.ndarray = field(init=False, repr=False)
+    total_sigma_m2: np.ndarray = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self.total_energy_ev = np.unique(
+            np.concatenate(
+                (
+                    self.elastic.energy_ev,
+                    self.excitation.energy_ev,
+                    self.ionization.energy_ev,
+                    [self.excitation_threshold_ev, self.ionization_threshold_ev],
+                )
+            )
+        )
+        self.total_sigma_m2 = np.interp(
+            self.total_energy_ev,
+            self.elastic.energy_ev,
+            self.elastic.sigma_m2,
+            left=0.0,
+            right=0.0,
+        )
+        excitation = np.interp(
+            self.total_energy_ev,
+            self.excitation.energy_ev,
+            self.excitation.sigma_m2,
+            left=0.0,
+            right=0.0,
+        )
+        ionization = np.interp(
+            self.total_energy_ev,
+            self.ionization.energy_ev,
+            self.ionization.sigma_m2,
+            left=0.0,
+            right=0.0,
+        )
+        self.total_sigma_m2 += np.where(
+            self.total_energy_ev >= self.excitation_threshold_ev, excitation, 0.0
+        )
+        self.total_sigma_m2 += np.where(
+            self.total_energy_ev >= self.ionization_threshold_ev, ionization, 0.0
+        )
 
     def cross_sections(self, energy_ev: float) -> np.ndarray:
         elastic = self.elastic.get(energy_ev)
@@ -89,12 +131,15 @@ class ArgonCollisionData:
         return np.array([elastic, excitation, ionization], dtype=float)
 
     def total_cross_section(self, energy_ev: float) -> float:
-        total = self.elastic.get(energy_ev)
-        if energy_ev >= self.excitation_threshold_ev:
-            total += self.excitation.get(energy_ev)
-        if energy_ev >= self.ionization_threshold_ev:
-            total += self.ionization.get(energy_ev)
-        return total
+        return float(
+            np.interp(
+                energy_ev,
+                self.total_energy_ev,
+                self.total_sigma_m2,
+                left=0.0,
+                right=0.0,
+            )
+        )
 
 
 def make_argon_collision_data() -> ArgonCollisionData:
@@ -349,19 +394,24 @@ class ElectronTrajectory:
                 "Electric and magnetic field callbacks must return 3 components."
             )
 
-        if not all(np.isfinite(component) for component in (*E, *B)):
-            raise ValueError(f"Non-finite field encountered at x={x}, y={y}.")
-
         ex, ey, ez = E
         bx, by, bz = B
-        charge_to_mass = -ELEMENTARY_CHARGE / ELECTRON_MASS
+        if (
+            not np.isfinite(ex)
+            or not np.isfinite(ey)
+            or not np.isfinite(ez)
+            or not np.isfinite(bx)
+            or not np.isfinite(by)
+            or not np.isfinite(bz)
+        ):
+            raise ValueError(f"Non-finite field encountered at x={x}, y={y}.")
 
         derivative = np.empty(5, dtype=float)
         derivative[0] = vx
         derivative[1] = vy
-        derivative[2] = charge_to_mass * (ex + vy * bz - vz * by)
-        derivative[3] = charge_to_mass * (ey + vz * bx - vx * bz)
-        derivative[4] = charge_to_mass * (ez + vx * by - vy * bx)
+        derivative[2] = ELECTRON_CHARGE_TO_MASS * (ex + vy * bz - vz * by)
+        derivative[3] = ELECTRON_CHARGE_TO_MASS * (ey + vz * bx - vx * bz)
+        derivative[4] = ELECTRON_CHARGE_TO_MASS * (ez + vx * by - vy * bx)
         return derivative
 
     @staticmethod
